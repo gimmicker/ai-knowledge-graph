@@ -14,7 +14,7 @@ from src.knowledge_graph.llm import call_llm, extract_json_from_text
 from src.knowledge_graph.visualization import visualize_knowledge_graph, sample_data_visualization
 from src.knowledge_graph.text_utils import chunk_text
 from src.knowledge_graph.entity_standardization import standardize_entities, infer_relationships, limit_predicate_length
-from src.knowledge_graph.prompts import MAIN_SYSTEM_PROMPT, MAIN_USER_PROMPT
+from src.knowledge_graph.prompts import get_main_prompts
 
 def process_with_llm(config, input_text, debug=False):
     """
@@ -28,10 +28,9 @@ def process_with_llm(config, input_text, debug=False):
     Returns:
         List of extracted triples or None if processing failed
     """
-    # Use prompts from the prompts module
-    system_prompt = MAIN_SYSTEM_PROMPT
-    user_prompt = MAIN_USER_PROMPT
-    user_prompt += f"```\n{input_text}```\n" 
+    language = config.get("general", {}).get("language", "en")
+    system_prompt, base_user_prompt = get_main_prompts(language)
+    user_prompt = base_user_prompt + f"```\n{input_text}```\n"
 
     # LLM configuration
     model = config["llm"]["model"]
@@ -100,22 +99,31 @@ def process_text_in_chunks(config, full_text, debug=False):
     Returns:
         List of all extracted triples from all chunks
     """
-    # Get chunking parameters from config
-    chunk_size = config.get("chunking", {}).get("chunk_size", 500)
-    overlap = config.get("chunking", {}).get("overlap", 50)
-    
-    # Split text into chunks
-    text_chunks = chunk_text(full_text, chunk_size, overlap)
+    general = config.get("general", {})
+    chunk_conf = config.get("chunking", {})
+    chunk_size = chunk_conf.get("chunk_size", 500)
+    overlap = chunk_conf.get("overlap", 50)
+    token_unit = general.get("token_unit", "words")
+    sentence_splitter = general.get("sentence_splitter", "none")
+    language = general.get("language", "en")
+
+    text_chunks = chunk_text(full_text, chunk_size, overlap, token_unit, sentence_splitter, language)
     
     print("=" * 50)
     print("PHASE 1: INITIAL TRIPLE EXTRACTION")
     print("=" * 50)
-    print(f"Processing text in {len(text_chunks)} chunks (size: {chunk_size} words, overlap: {overlap} words)")
+    print(f"Processing text in {len(text_chunks)} chunks (size: {chunk_size} {token_unit}, overlap: {overlap} {token_unit})")
     
     # Process each chunk
     all_results = []
     for i, chunk in enumerate(text_chunks):
-        print(f"Processing chunk {i+1}/{len(text_chunks)} ({len(chunk.split())} words)")
+        if token_unit == "chars":
+            size_info = f"{len(chunk)} chars"
+        elif token_unit == "sentences":
+            size_info = f"{len(chunk.split('.'))} sentences"
+        else:
+            size_info = f"{len(chunk.split())} words"
+        print(f"Processing chunk {i+1}/{len(text_chunks)} ({size_info})")
         
         # Process the chunk with LLM
         chunk_results = process_with_llm(config, chunk, debug)
@@ -208,6 +216,8 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable debug output (raw LLM responses and extracted JSON)')
     parser.add_argument('--no-standardize', action='store_true', help='Disable entity standardization')
     parser.add_argument('--no-inference', action='store_true', help='Disable relationship inference')
+    parser.add_argument('--language', '--lang', dest='language', choices=['en', 'ko'], help='Override language setting')
+    parser.add_argument('--token-unit', choices=['chars', 'words', 'sentences'], dest='token_unit', help='Chunking unit')
     
     args = parser.parse_args()
     
@@ -232,11 +242,17 @@ def main():
         parser.print_help()
         return
     
-    # Override configuration settings with command line arguments
+    # Override configuration settings with command line arguments and env vars
     if args.no_standardize:
         config.setdefault("standardization", {})["enabled"] = False
     if args.no_inference:
         config.setdefault("inference", {})["enabled"] = False
+
+    env_lang = os.getenv("KG_LANGUAGE")
+    env_unit = os.getenv("KG_TOKEN_UNIT")
+    general = config.setdefault("general", {})
+    general["language"] = args.language or env_lang or general.get("language", "en")
+    general["token_unit"] = args.token_unit or env_unit or general.get("token_unit", "words")
     
     # Load input text from file
     try:

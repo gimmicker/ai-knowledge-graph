@@ -1,3 +1,10 @@
+[general]
+language = "ko"           # "ko" | "en"
+token_unit = "chars"      # "chars" | "words" | "sentences" (ko 권장: chars 또는 sentences)
+sentence_splitter = "kss" # "none" | "kss"
+normalize_honorifics = true
+strip_particles = true    # 조사 제거 기반 표준화 시도
+
 [llm]
 model = "gemma3"
 #model = "claude-3.5-sonnet-v2"
@@ -11,8 +18,11 @@ max_tokens = 8192
 temperature = 0.8
 
 [chunking]
-chunk_size = 100  # Number of words per chunk
-overlap = 20      # Number of words to overlap between chunks
+chunk_size = 1200  # ko는 문자 기준 권장
+overlap = 150
+
+[predicates]
+predicates_path = "data/predicate_schema_ko.json"  # 한글 관계어 표준 집합
 
 [standardization]
 enabled = true             # Whether to enable entity standardization
@@ -24,5 +34,7 @@ use_llm_for_inference = true  # Whether to use LLM for relationship inference
 apply_transitive = true    # Whether to apply transitive inference rules
 
 [visualization]
-edge_smooth = false  # Options: false, "dynamic", "continuous", "discrete", "diagonalCross", 
+edge_smooth = false  # Options: false, "dynamic", "continuous", "discrete", "diagonalCross",
                          # "straightCross", "horizontal", "vertical", "curvedCW", "curvedCCW", "cubicBezier": true = "continuous"
+font_family = "Noto Sans KR"  # 웹폰트로 로딩
+

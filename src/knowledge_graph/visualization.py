@@ -148,7 +148,7 @@ def visualize_knowledge_graph(triples, output_file="knowledge_graph.html", edge_
     
     
     # Save the network as HTML and modify with custom template
-    _save_and_modify_html(net, output_file, community_count, all_nodes, triples)
+    _save_and_modify_html(net, output_file, community_count, all_nodes, triples, config)
     
     # Return statistics
     original_edges = len(triples) - len(inferred_edges)
@@ -322,7 +322,7 @@ def _get_visualization_options(edge_smooth=False):
         }
     }
 
-def _save_and_modify_html(net, output_file, community_count, all_nodes, triples):
+def _save_and_modify_html(net, output_file, community_count, all_nodes, triples, config=None):
     """Save the network as HTML and modify with custom template."""
     # Instead of letting PyVis write to a file, we'll access its HTML directly
     # and write it ourselves with explicit UTF-8 encoding
@@ -333,17 +333,25 @@ def _save_and_modify_html(net, output_file, community_count, all_nodes, triples)
     
     # Get the HTML from PyVis's internal html attribute
     html = net.html
-    
+
     # Add our custom controls by replacing the div with our template
     html = html.replace('<div id="mynetwork" class="card-body"></div>', _load_html_template())
-    
+
     # Fix the duplicate title issue
-    # Remove the default PyVis header
     html = re.sub(r'<center>\s*<h1>.*?</h1>\s*</center>', '', html)
-    
-    # Replace the other h1 with our enhanced title
     html = html.replace('<h1></h1>', f'<h1>Knowledge Graph - {len(all_nodes)} Nodes, {len(triples)} Relationships, {community_count} Communities</h1>')
-    
+
+    # Inject font and encoding for Korean text
+    font_family = config.get("visualization", {}).get("font_family", "Noto Sans KR") if config else "Noto Sans KR"
+    font_block = (
+        '<meta charset="utf-8">'
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">'
+        f"<style> body, .vis-network, .legend {{ font-family: '{font_family}', sans-serif; }} .vis-network {{ white-space: pre-wrap; }}</style>"
+    )
+    html = html.replace('<head>', f'<head>{font_block}')
+
     # Write the HTML directly to the output file with explicit UTF-8 encoding
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html)

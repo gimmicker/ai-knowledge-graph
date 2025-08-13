@@ -1,15 +1,21 @@
 """Entity standardization and relationship inference for knowledge graphs."""
+import json
+import os
 import re
 from collections import defaultdict
+
 from src.knowledge_graph.llm import call_llm
 from src.knowledge_graph.prompts import (
-    ENTITY_RESOLUTION_SYSTEM_PROMPT, 
+    ENTITY_RESOLUTION_SYSTEM_PROMPT,
     get_entity_resolution_user_prompt,
+    get_entity_resolution_prompts,
     RELATIONSHIP_INFERENCE_SYSTEM_PROMPT,
     get_relationship_inference_user_prompt,
     WITHIN_COMMUNITY_INFERENCE_SYSTEM_PROMPT,
-    get_within_community_inference_user_prompt
+    get_within_community_inference_user_prompt,
+    RELATION_PROMPTS,
 )
+from src.knowledge_graph.text_utils import strip_korean_particles
 
 def limit_predicate_length(predicate, max_words=3):
     """
@@ -34,8 +40,29 @@ def limit_predicate_length(predicate, max_words=3):
     last_word = shortened.split()[-1].lower()
     if last_word in stop_words and len(words) > 1:
         shortened = ' '.join(shortened.split()[:-1])
-    
+
     return shortened
+
+
+def _load_predicate_set(config):
+    """Load allowed predicates from configuration."""
+
+    path = config.get("predicates", {}).get("predicates_path")
+    if not path or not os.path.exists(path):
+        return set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        allowed = set()
+        for item in data:
+            for key in ("ko", "en"):
+                if item.get(key):
+                    allowed.add(item[key])
+            for alias in item.get("aliases", []):
+                allowed.add(alias)
+        return allowed
+    except Exception:
+        return set()
 
 def standardize_entities(triples, config):
     """
@@ -70,6 +97,12 @@ def standardize_entities(triples, config):
         print("Error: No valid triples found for entity standardization")
         return []
     
+    language = config.get("general", {}).get("language", "en")
+    if language == "ko" and config.get("general", {}).get("strip_particles", False):
+        for triple in valid_triples:
+            triple["subject"] = strip_korean_particles(triple["subject"])
+            triple["object"] = strip_korean_particles(triple["object"])
+
     # 1. Extract all unique entities
     all_entities = set()
     for triple in valid_triples:
@@ -412,8 +445,9 @@ def _resolve_entities_with_llm(triples, config):
     
     # Prepare prompt for LLM
     entity_list = "\n".join(sorted(all_entities))
-    system_prompt = ENTITY_RESOLUTION_SYSTEM_PROMPT
-    user_prompt = get_entity_resolution_user_prompt(entity_list)
+    language = config.get("general", {}).get("language", "en")
+    system_prompt, user_fn = get_entity_resolution_prompts(language)
+    user_prompt = user_fn(entity_list)
     
     try:
         # LLM configuration
@@ -478,6 +512,9 @@ def _infer_relationships_with_llm(triples, communities, config):
     # For each pair of large communities, try to infer relationships
     new_triples = []
     
+    allowed_predicates = _load_predicate_set(config)
+    language = config.get("general", {}).get("language", "en")
+
     for i, comm1 in enumerate(large_communities):
         for j, comm2 in enumerate(large_communities):
             if i >= j:
@@ -509,8 +546,11 @@ def _infer_relationships_with_llm(triples, communities, config):
             entities2 = ", ".join(rep2)
             
             # Create prompt for LLM
-            system_prompt = RELATIONSHIP_INFERENCE_SYSTEM_PROMPT
-            user_prompt = get_relationship_inference_user_prompt(entities1, entities2, triples_text)
+            if language == "en":
+                system_prompt = RELATIONSHIP_INFERENCE_SYSTEM_PROMPT
+            else:
+                system_prompt = RELATION_PROMPTS.get(language, RELATION_PROMPTS["en"])[0]
+            user_prompt = get_relationship_inference_user_prompt(entities1, entities2, triples_text, language)
             
             try:
                 # LLM configuration
@@ -528,14 +568,15 @@ def _infer_relationships_with_llm(triples, communities, config):
                 inferred_triples = extract_json_from_text(response)
                 
                 if inferred_triples and isinstance(inferred_triples, list):
-                    # Mark as inferred and add to new triples
                     for triple in inferred_triples:
                         if "subject" in triple and "predicate" in triple and "object" in triple:
-                            # Skip self-referencing triples
                             if triple["subject"] == triple["object"]:
                                 continue
+                            pred = limit_predicate_length(triple["predicate"])
+                            if allowed_predicates and pred not in allowed_predicates:
+                                continue
                             triple["inferred"] = True
-                            triple["predicate"] = limit_predicate_length(triple["predicate"])
+                            triple["predicate"] = pred
                             new_triples.append(triple)
                     
                     print(f"Inferred {len(new_triples)} new relationships between communities")
@@ -561,7 +602,9 @@ def _infer_within_community_relationships(triples, communities, config):
         List of new inferred triples
     """
     new_triples = []
-    
+    allowed_predicates = _load_predicate_set(config)
+    language = config.get("general", {}).get("language", "en")
+
     # Process larger communities
     for community in sorted(communities, key=len, reverse=True)[:3]:
         # Skip small communities
@@ -623,8 +666,11 @@ def _infer_within_community_relationships(triples, communities, config):
         pairs_text = "\n".join([f"{a} and {b}" for a, b in disconnected_pairs])
         
         # Create prompt for LLM
-        system_prompt = WITHIN_COMMUNITY_INFERENCE_SYSTEM_PROMPT
-        user_prompt = get_within_community_inference_user_prompt(pairs_text, triples_text)
+        if language == "en":
+            system_prompt = WITHIN_COMMUNITY_INFERENCE_SYSTEM_PROMPT
+        else:
+            system_prompt = RELATION_PROMPTS.get(language, RELATION_PROMPTS["en"])[0]
+        user_prompt = get_within_community_inference_user_prompt(pairs_text, triples_text, language)
         
         try:
             # LLM configuration
@@ -642,14 +688,15 @@ def _infer_within_community_relationships(triples, communities, config):
             inferred_triples = extract_json_from_text(response)
             
             if inferred_triples and isinstance(inferred_triples, list):
-                # Mark as inferred and add to new triples
                 for triple in inferred_triples:
                     if "subject" in triple and "predicate" in triple and "object" in triple:
-                        # Skip self-referencing triples
                         if triple["subject"] == triple["object"]:
                             continue
+                        pred = limit_predicate_length(triple["predicate"])
+                        if allowed_predicates and pred not in allowed_predicates:
+                            continue
                         triple["inferred"] = True
-                        triple["predicate"] = limit_predicate_length(triple["predicate"])
+                        triple["predicate"] = pred
                         new_triples.append(triple)
                 
                 print(f"Inferred {len(inferred_triples)} new relationships within communities")

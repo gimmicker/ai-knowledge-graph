@@ -1,147 +1,188 @@
-"""Centralized repository for all LLM prompts used in the knowledge graph system."""
+"""Centralised repository for LLM prompts.
 
-# Phase 1: Main extraction prompts
-MAIN_SYSTEM_PROMPT = """
-You are an advanced AI system specialized in knowledge extraction and knowledge graph generation.
-Your expertise includes identifying consistent entity references and meaningful relationships in text.
-CRITICAL INSTRUCTION: All relationships (predicates) MUST be no more than 3 words maximum. Ideally 1-2 words. This is a hard limit.
+The module exposes helper functions that return prompts according to the
+requested language. English prompts mirror the original project while
+Korean prompts implement guidance for subject–predicate–object extraction,
+entity standardisation and relationship inference.
 """
 
-MAIN_USER_PROMPT = """
-Your task: Read the text below (delimited by triple backticks) and identify all Subject-Predicate-Object (S-P-O) relationships in each sentence. Then produce a single JSON array of objects, each representing one triple.
+from __future__ import annotations
 
-Follow these rules carefully:
+from typing import Callable, Dict, Tuple
 
-- Entity Consistency: Use consistent names for entities throughout the document. For example, if "John Smith" is mentioned as "John", "Mr. Smith", and "John Smith" in different places, use a single consistent form (preferably the most complete one) in all triples.
-- Atomic Terms: Identify distinct key terms (e.g., objects, locations, organizations, acronyms, people, conditions, concepts, feelings). Avoid merging multiple ideas into one term (they should be as "atomistic" as possible).
-- Unified References: Replace any pronouns (e.g., "he," "she," "it," "they," etc.) with the actual referenced entity, if identifiable.
-- Pairwise Relationships: If multiple terms co-occur in the same sentence (or a short paragraph that makes them contextually related), create one triple for each pair that has a meaningful relationship.
-- CRITICAL INSTRUCTION: Predicates MUST be 1-3 words maximum. Never more than 3 words. Keep them extremely concise.
-- Ensure that all possible relationships are identified in the text and are captured in an S-P-O relation.
-- Standardize terminology: If the same concept appears with slight variations (e.g., "artificial intelligence" and "AI"), use the most common or canonical form consistently.
-- Make all the text of S-P-O text lower-case, even Names of people and places.
-- If a person is mentioned by name, create a relation to their location, profession and what they are known for (invented, wrote, started, title, etc.) if known and if it fits the context of the informaiton. 
 
-Important Considerations:
-- Aim for precision in entity naming - use specific forms that distinguish between similar but different entities
-- Maximize connectedness by using identical entity names for the same concepts throughout the document
-- Consider the entire context when identifying entity references
-- ALL PREDICATES MUST BE 3 WORDS OR FEWER - this is a hard requirement
+# ---------------------------------------------------------------------------
+# Main extraction prompts
+# ---------------------------------------------------------------------------
 
-Output Requirements:
 
-- Do not include any text or commentary outside of the JSON.
-- Return only the JSON array, with each triple as an object containing "subject", "predicate", and "object".
-- Make sure the JSON is valid and properly formatted.
+def _en_main_prompts() -> Tuple[str, str]:
+    system = (
+        "You are an advanced AI system specialised in knowledge extraction "
+        "and knowledge graph generation.\n"
+        "CRITICAL INSTRUCTION: predicates must be 3 words or fewer."
+    )
 
-Example of the desired output structure:
+    user = (
+        "Your task: Read the text below (delimited by triple backticks) "
+        "and identify all Subject-Predicate-Object relationships.\n"
+        "Return a JSON array only."
+        "\n\nText to analyse:\n``\n"
+    )
+    return system, user
 
-[
-  {
-    "subject": "Term A",
-    "predicate": "relates to",  // Notice: only 2 words
-    "object": "Term B"
-  },
-  {
-    "subject": "Term C",
-    "predicate": "uses",  // Notice: only 1 word
-    "object": "Term D"
-  }
-]
 
-Important: Only output the JSON array (with the S-P-O objects) and nothing else
+def _ko_main_prompts() -> Tuple[str, str]:
+    system = (
+        "당신은 한국어 지문에서 지식 그래프 삼중항을 추출하는 전문가입니다."\
+        " 문장 속 주어, 술어, 목적어를 정확히 찾아 JSON 형태로 제시하세요."
+    )
 
-Text to analyze (between triple backticks):
-"""
+    user = (
+        "다음 한국어 문단을 읽고 모든 주어-술어-목적어(S-P-O) 관계를 "
+        "JSON 배열로 추출하십시오.\n"
+        "지침:\n"
+        "- 출력은 JSON 배열만 사용합니다. 각 항목은 {\"subject\":\"...\","
+        " \"predicate\":\"...\", \"object\":\"...\"}\n"
+        "- 조사와 어미를 제거하고 가능한 한 표제어로 기록합니다.\n"
+        "- \"이다\", \"있다\", \"했다\" 등 의미가 빈약한 술어는 제외합니다.\n"
+        "- 필요하면 time, source_span 필드를 추가할 수 있습니다.\n"
+        "\n한국어 텍스트:\n``\n"
+    )
+    return system, user
 
-# Phase 2: Entity standardization prompts
-ENTITY_RESOLUTION_SYSTEM_PROMPT = """
-You are an expert in entity resolution and knowledge representation.
-Your task is to standardize entity names from a knowledge graph to ensure consistency.
-"""
 
-def get_entity_resolution_user_prompt(entity_list):
-    return f"""
-Below is a list of entity names extracted from a knowledge graph. 
-Some may refer to the same real-world entities but with different wording.
+MAIN_PROMPTS: Dict[str, Tuple[str, str]] = {
+    "en": _en_main_prompts(),
+    "ko": _ko_main_prompts(),
+}
 
-Please identify groups of entities that refer to the same concept, and provide a standardized name for each group.
-Return your answer as a JSON object where the keys are the standardized names and the values are arrays of all variant names that should map to that standard name.
-Only include entities that have multiple variants or need standardization.
 
-Entity list:
-{entity_list}
+def get_main_prompts(language: str = "en") -> Tuple[str, str]:
+    return MAIN_PROMPTS.get(language, MAIN_PROMPTS["en"])
 
-Format your response as valid JSON like this:
-{{
-  "standardized name 1": ["variant 1", "variant 2"],
-  "standardized name 2": ["variant 3", "variant 4", "variant 5"]
-}}
-"""
 
-# Phase 3: Community relationship inference prompts
-RELATIONSHIP_INFERENCE_SYSTEM_PROMPT = """
-You are an expert in knowledge representation and inference. 
-Your task is to infer plausible relationships between disconnected entities in a knowledge graph.
-"""
+# Backwards compatibility constants
+MAIN_SYSTEM_PROMPT, MAIN_USER_PROMPT = get_main_prompts("en")
 
-def get_relationship_inference_user_prompt(entities1, entities2, triples_text):
-    return f"""
-I have a knowledge graph with two disconnected communities of entities. 
 
-Community 1 entities: {entities1}
-Community 2 entities: {entities2}
+# ---------------------------------------------------------------------------
+# Entity resolution prompts
+# ---------------------------------------------------------------------------
 
-Here are some existing relationships involving these entities:
-{triples_text}
 
-Please infer 2-3 plausible relationships between entities from Community 1 and entities from Community 2.
-Return your answer as a JSON array of triples in the following format:
+def _en_entity_prompts() -> Tuple[str, Callable[[str], str]]:
+    system = (
+        "You are an expert in entity resolution and knowledge representation."
+    )
 
-[
-  {{
-    "subject": "entity from community 1",
-    "predicate": "inferred relationship",
-    "object": "entity from community 2"
-  }},
-  ...
-]
+    def user(entity_list: str) -> str:
+        return (
+            "Below is a list of entity names extracted from a knowledge graph.\n"
+            "Standardise variants and return JSON mapping.\n\n" f"Entity list:\n{entity_list}\n"
+        )
 
-Only include highly plausible relationships with clear predicates.
-IMPORTANT: The inferred relationships (predicates) MUST be no more than 3 words maximum. Preferably 1-2 words. Never more than 3.
-For predicates, use short phrases that clearly describe the relationship.
-IMPORTANT: Make sure the subject and object are different entities - avoid self-references.
-"""
+    return system, user
 
-# Phase 4: Within-community relationship inference prompts
-WITHIN_COMMUNITY_INFERENCE_SYSTEM_PROMPT = """
-You are an expert in knowledge representation and inference. 
-Your task is to infer plausible relationships between semantically related entities that are not yet connected in a knowledge graph.
-"""
 
-def get_within_community_inference_user_prompt(pairs_text, triples_text):
-    return f"""
-I have a knowledge graph with several entities that appear to be semantically related but are not directly connected.
+def _ko_entity_prompts() -> Tuple[str, Callable[[str], str]]:
+    system = "당신은 지식 그래프 엔터티 표준화를 담당하는 한국어 전문가입니다."
 
-Here are some pairs of entities that might be related:
-{pairs_text}
+    def user(entity_list: str) -> str:
+        return (
+            "다음은 추출된 엔터티 목록입니다.\n"
+            "각 항목을 표준 형태와 별칭으로 정리하세요.\n"
+            "출력 형식: [{\"canonical\":\"...\", \"aliases\":[...]}]\n\n"
+            f"엔터티:\n{entity_list}\n"
+        )
 
-Here are some existing relationships involving these entities:
-{triples_text}
+    return system, user
 
-Please infer plausible relationships between these disconnected pairs.
-Return your answer as a JSON array of triples in the following format:
 
-[
-  {{
-    "subject": "entity1",
-    "predicate": "inferred relationship",
-    "object": "entity2"
-  }},
-  ...
-]
+ENTITY_PROMPTS: Dict[str, Tuple[str, Callable[[str], str]]] = {
+    "en": _en_entity_prompts(),
+    "ko": _ko_entity_prompts(),
+}
 
-Only include highly plausible relationships with clear predicates.
-IMPORTANT: The inferred relationships (predicates) MUST be no more than 3 words maximum. Preferably 1-2 words. Never more than 3.
-IMPORTANT: Make sure that the subject and object are different entities - avoid self-references.
-""" 
+
+def get_entity_resolution_prompts(
+    language: str = "en",
+) -> Tuple[str, Callable[[str], str]]:
+    return ENTITY_PROMPTS.get(language, ENTITY_PROMPTS["en"])
+
+
+# Backwards compatibility
+ENTITY_RESOLUTION_SYSTEM_PROMPT, _entity_user_en = _en_entity_prompts()
+
+
+def get_entity_resolution_user_prompt(entity_list: str, language: str = "en") -> str:
+    _, user_fn = get_entity_resolution_prompts(language)
+    return user_fn(entity_list)
+
+
+# ---------------------------------------------------------------------------
+# Relationship inference prompts
+# ---------------------------------------------------------------------------
+
+
+def _en_relation_prompts() -> Tuple[str, Callable[[str, str, str], str]]:
+    system = (
+        "You are an expert in knowledge representation and inference."
+    )
+
+    def user(entities1: str, entities2: str, triples_text: str) -> str:
+        return (
+            "I have a knowledge graph with two disconnected communities of entities.\n"
+            f"Community 1 entities: {entities1}\n"
+            f"Community 2 entities: {entities2}\n"
+            f"Existing relationships:\n{triples_text}\n"
+            "Infer 2-3 plausible relationships and return JSON array with "
+            "subject, predicate, object."
+        )
+
+    return system, user
+
+
+def _ko_relation_prompts() -> Tuple[str, Callable[[str, str, str], str]]:
+    system = "당신은 표준 술어 집합을 사용해 신뢰할 수 있는 관계만 제안하는 한국어 전문가입니다."
+
+    def user(entities1: str, entities2: str, triples_text: str) -> str:
+        return (
+            "다음은 두 개의 엔터티 집합입니다.\n"
+            f"커뮤니티1: {entities1}\n"
+            f"커뮤니티2: {entities2}\n"
+            f"기존 관계:\n{triples_text}\n"
+            "표준 술어만 사용해 새로운 관계를 JSON 배열로 제시하세요.\n"
+            "각 항목은 {\"subject\":..., \"predicate\":..., \"object\":..., \"confidence\":\"high|medium|low\", \"rationale\":\"...\"} 형태입니다."
+        )
+
+    return system, user
+
+
+RELATION_PROMPTS: Dict[str, Tuple[str, Callable[[str, str, str], str]]] = {
+    "en": _en_relation_prompts(),
+    "ko": _ko_relation_prompts(),
+}
+
+
+def get_relationship_inference_user_prompt(
+    entities1: str, entities2: str, triples_text: str, language: str = "en"
+) -> str:
+    _, user_fn = RELATION_PROMPTS.get(language, RELATION_PROMPTS["en"])
+    return user_fn(entities1, entities2, triples_text)
+
+
+def get_within_community_inference_user_prompt(
+    pairs_text: str, triples_text: str, language: str = "en"
+) -> str:
+    # For simplicity use the same structure as cross-community prompt
+    return (
+        "다음 엔터티 쌍에 대해 신뢰 가능한 관계를 추론하여 JSON 배열로 제시하세요.\n"
+        if language == "ko"
+        else "Infer plausible relationships between these entity pairs and return JSON array.\n"
+    ) + f"Pairs:\n{pairs_text}\nExisting:\n{triples_text}\n"
+
+
+RELATIONSHIP_INFERENCE_SYSTEM_PROMPT, _relation_user_en = _en_relation_prompts()
+WITHIN_COMMUNITY_INFERENCE_SYSTEM_PROMPT = RELATIONSHIP_INFERENCE_SYSTEM_PROMPT
+

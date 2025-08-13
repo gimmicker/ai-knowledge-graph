@@ -5,6 +5,10 @@
 This system takes an unstructured text document, and uses an LLM of your choice to extract knowledge in the form of Subject-Predicate-Object (SPO) triplets, and visualizes the relationships as an interactive knowledge graph.
 A demo of a knowlege graph created with this project can be found here: [Industrial-Revolution Knowledge Graph](https://robert-mcdermott.github.io/ai-knowledge-graph/)
 
+## Korean Support
+
+For guidance on using the system with Korean documents, see [README_KO.md](README_KO.md).
+
 
 ## Features
 

@@ -26,6 +26,9 @@ pytz==2025.1
 pyvis==0.3.2
 pyvis-network==0.0.6
 requests==2.32.3
+regex==2024.11.6
+kss==5.0.0
+kiwipiepy==0.15.2
 six==1.17.0
 stack-data==0.6.3
 tomli==2.2.1
