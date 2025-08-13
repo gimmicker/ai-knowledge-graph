@@ -1,0 +1,11 @@
+[
+  {"subject": "세종대왕", "predicate": "창제", "object": "한글"},
+  {"subject": "세종대왕", "predicate": "영향", "object": "조선 학문"},
+  {"subject": "정약용", "predicate": "설계", "object": "수원 화성"},
+  {"subject": "정약용", "predicate": "제작", "object": "기계"},
+  {"subject": "한국", "predicate": "산업화", "object": "경제 성장"},
+  {"subject": "한국", "predicate": "투자", "object": "과학 연구"},
+  {"subject": "한국 인공지능 연구", "predicate": "협력", "object": "정부"},
+  {"subject": "한국 인공지능 연구", "predicate": "협력", "object": "민간 기업"}
+]
+

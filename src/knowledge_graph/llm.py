@@ -1,4 +1,11 @@
-"""LLM interaction utilities for knowledge graph generation."""
+"""LLM interaction utilities for knowledge graph generation.
+
+When working with Korean text consider using models with strong
+multilingual capabilities such as ``gemma3``, ``GPT-4o``, ``Claude 3.5
+Sonnet`` or ``Llama 3.1 Instruct``. The rest of the code selects
+language-specific prompts based on configuration and simply forwards the
+constructed prompts to this module.
+"""
 import requests
 import json
 import re

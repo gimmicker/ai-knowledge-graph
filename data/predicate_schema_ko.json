@@ -1,0 +1,23 @@
+[
+  {"ko": "발명", "en": "invented", "aliases": ["고안"]},
+  {"ko": "개발", "en": "developed", "aliases": []},
+  {"ko": "도입", "en": "introduced", "aliases": []},
+  {"ko": "개정", "en": "revised", "aliases": []},
+  {"ko": "영향", "en": "influenced", "aliases": []},
+  {"ko": "원인", "en": "caused", "aliases": []},
+  {"ko": "결과", "en": "resulted", "aliases": []},
+  {"ko": "구성", "en": "composed of", "aliases": []},
+  {"ko": "소속", "en": "affiliated", "aliases": []},
+  {"ko": "관계", "en": "related to", "aliases": []},
+  {"ko": "위치", "en": "located in", "aliases": []},
+  {"ko": "생산", "en": "produced", "aliases": []},
+  {"ko": "사용", "en": "used", "aliases": []},
+  {"ko": "제조", "en": "manufactured", "aliases": []},
+  {"ko": "발견", "en": "discovered", "aliases": []},
+  {"ko": "발표", "en": "announced", "aliases": []},
+  {"ko": "제안", "en": "proposed", "aliases": []},
+  {"ko": "지원", "en": "supported", "aliases": []},
+  {"ko": "허가", "en": "authorized", "aliases": []},
+  {"ko": "금지", "en": "prohibited", "aliases": []}
+]
+
